@@ -1,0 +1,564 @@
+<title>StatDoctor Hospital Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: control-room dashboard — header, month scrubber with story captions, hero (shift swarm + draggable target gauge), KPI tiles, charts with draggable target line and rate rail */
+:root{
+  --bg:#EEF3F5; --surface:#FFFFFF; --surface-2:#F6F9FA; --ink:#12212B; --muted:#586A76; --line:#D7E0E5;
+  --accent:#0E6E8C; --accent-soft:#D6ECF3; --bad:#C2362B; --bad-soft:#FBE1DD; --good:#1E7F4F; --good-soft:#DCF1E4;
+  --amber:#A8600A; --amber-soft:#F8E7CF; --grid:#E4EAEE; --shade:rgba(18,33,43,.4); --empty:#DEE6EA; --glow:rgba(14,110,140,.10);
+  --display:"Bricolage Grotesque","Public Sans",system-ui,sans-serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0C141A; --surface:#141F27; --surface-2:#18252E; --ink:#E5EDF2; --muted:#8FA1AD; --line:#24333D;
+  --accent:#4FB3D1; --accent-soft:#143241; --bad:#F0776B; --bad-soft:#3A1E1B; --good:#5CC98F; --good-soft:#15302A;
+  --amber:#E9A94B; --amber-soft:#3A2A14; --grid:#1F2C35; --shade:rgba(0,0,0,.6); --empty:#22303A; --glow:rgba(79,179,209,.12); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0C141A; --surface:#141F27; --surface-2:#18252E; --ink:#E5EDF2; --muted:#8FA1AD; --line:#24333D;
+  --accent:#4FB3D1; --accent-soft:#143241; --bad:#F0776B; --bad-soft:#3A1E1B; --good:#5CC98F; --good-soft:#15302A;
+  --amber:#E9A94B; --amber-soft:#3A2A14; --grid:#1F2C35; --shade:rgba(0,0,0,.6); --empty:#22303A; --glow:rgba(79,179,209,.12); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;transition:background .3s,color .3s}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:22px 36px;display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between}
+.brand{display:grid;gap:4px;min-width:0}
+.eyebrow{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{font-family:var(--display);font-size:clamp(24px,3.6vw,34px);margin:0;font-weight:800;letter-spacing:-.02em;line-height:1.05;text-wrap:balance}
+h2{font-size:15px;margin:0;font-weight:700}
+.sample{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.tag{background:var(--accent-soft);color:var(--accent);padding:2px 8px;border-radius:999px;font-weight:600}
+.tag.amber{background:var(--amber-soft);color:var(--amber)}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);color:var(--ink);background:var(--surface);padding:8px 13px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:background .15s,border-color .15s,transform .1s}
+.btn:hover{border-color:var(--accent);background:var(--accent-soft)} .btn:active{transform:scale(.96)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.primary:hover{filter:brightness(1.1);background:var(--accent)}
+.btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.btn .solid{fill:currentColor;stroke:none}
+.icon-btn{width:36px;height:36px;padding:0;justify-content:center}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;min-width:0;overflow:hidden}
+.panel.spot::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(360px circle at var(--mx,-999px) var(--my,-999px),var(--glow),transparent 70%);transition:opacity .3s}
+.head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 14px}
+.note{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+.hint svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.story{font-family:var(--mono);font-size:11px;color:var(--muted);border:1px solid var(--line);padding:1px 6px;border-radius:4px}
+
+/* scrubber */
+.scrub-panel{display:grid;gap:12px}
+.scrub{position:relative;height:54px;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;margin-inline:14px 46px}
+svg{user-select:none;-webkit-user-select:none}
+.scrub:active{cursor:grabbing}
+.scrub .rail{position:absolute;left:0;right:0;top:15px;height:6px;border-radius:6px;background:var(--empty)}
+.scrub .fillbar{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:var(--accent)}
+.scrub .stop{position:absolute;top:0;transform:translateX(-50%);display:grid;justify-items:center;gap:12px;background:none;border:0;padding:0;font:inherit;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.scrub .stop i{width:14px;height:14px;margin-top:11px;border-radius:50%;background:var(--surface);border:2px solid var(--line);transition:border-color .2s,background .2s}
+.scrub .stop.on{color:var(--ink)} .scrub .stop.on i{border-color:var(--accent);background:var(--accent)}
+.scrub .knob{position:absolute;top:4px;width:28px;height:28px;margin-left:-14px;border-radius:50%;background:var(--surface);border:3px solid var(--accent);box-shadow:0 4px 14px -4px var(--shade);pointer-events:none}
+.scrub .knob::after{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--accent)}
+.caption{display:flex;gap:12px;align-items:flex-start;min-height:44px}
+.caption .mtag{font-family:var(--display);font-weight:800;font-size:20px;line-height:1.1;color:var(--accent);min-width:64px}
+.caption p{margin:0;font-size:14.5px;max-width:78ch;animation:rise .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
+.progress{height:3px;border-radius:3px;background:var(--empty);overflow:hidden}
+.progress b{display:block;height:100%;width:0;background:var(--accent)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:16px}
+@media (max-width:820px){.hero{grid-template-columns:1fr}}
+.swarm-wrap{position:relative;margin-top:10px}
+#swarm{display:block;width:100%;height:clamp(240px,30vw,330px);cursor:crosshair;touch-action:none}
+.gauge-panel{display:grid;justify-items:center;align-content:start;gap:8px;text-align:center}
+.gauge-panel .head{width:100%;text-align:left}
+#gauge{width:min(250px,100%);height:auto;touch-action:none;overflow:visible}
+#gauge .handle{cursor:grab} #gauge .handle:active{cursor:grabbing}
+.pill{display:inline-block;font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:999px;transition:background .3s,color .3s}
+.pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.good{background:var(--good-soft);color:var(--good)}
+.sub{font-size:13px;color:var(--muted)}
+
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.kpi{display:grid;gap:6px;align-content:start;transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s,border-color .25s;transform-style:preserve-3d}
+.kpi:hover{border-color:var(--accent);box-shadow:0 14px 30px -18px var(--shade)}
+.kpi .label{font-size:13px;color:var(--muted);font-weight:600;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.value{font-family:var(--mono);font-size:clamp(30px,4.4vw,40px);font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;letter-spacing:-.02em;transition:color .3s}
+.cmp{display:grid;gap:5px;margin-top:6px;font-size:12px;color:var(--muted)}
+.cmp .row{display:grid;grid-template-columns:86px 1fr auto;gap:8px;align-items:center}
+.cmp .bar{height:8px;border-radius:4px;background:var(--empty);overflow:hidden}
+.cmp .bar b{display:block;height:100%;border-radius:4px}
+.cmp .num{font-family:var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.minis{display:flex;gap:8px;align-items:flex-end;height:44px;margin-top:6px}
+.minis div{flex:1;display:grid;gap:3px;justify-items:center;font-size:11px;color:var(--muted)}
+.minis span{display:block;width:100%;border-radius:4px 4px 2px 2px;background:var(--bad);transition:opacity .3s,height .5s}
+
+/* charts */
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+@media (max-width:420px){.charts{grid-template-columns:1fr}}
+.chart{width:100%;height:auto;display:block;overflow:visible;touch-action:none}
+.chart text{font-family:var(--body);font-size:12px;fill:var(--muted)}
+.chart .val{font-family:var(--mono);font-size:12px;fill:var(--ink);font-weight:600}
+.chart .bar{cursor:pointer}
+.chart .drag{cursor:ns-resize}
+.sv-body{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.sv-body .chart{flex:1 1 220px;min-width:0}
+.rail-wrap{flex:0 0 150px;display:grid;justify-items:center;gap:4px}
+#rail{width:150px;height:auto;touch-action:none;overflow:visible}
+#rail .knob{cursor:grab} #rail .knob:active{cursor:grabbing}
+.scenario{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;margin-top:10px;font-size:13px}
+.delta{font-family:var(--mono);font-size:12.5px}
+footer{font-size:12px;color:var(--muted)}
+kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;background:var(--surface)}
+
+#tip{position:fixed;z-index:30;pointer-events:none;background:var(--ink);color:var(--surface);font-size:12px;padding:6px 9px;border-radius:7px;font-family:var(--mono);white-space:nowrap;box-shadow:0 8px 20px -10px var(--shade)}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:25}
+
+.scrim{position:fixed;inset:0;z-index:40;background:var(--shade);display:flex;justify-content:flex-end;animation:fade .2s}
+.drawer{background:var(--surface);width:min(440px,100%);height:100%;overflow:auto;padding:22px 22px calc(22px + env(safe-area-inset-bottom,0px));display:grid;align-content:start;gap:14px;border-left:1px solid var(--line);animation:slide .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes fade{from{opacity:0}} @keyframes slide{from{transform:translateX(60px);opacity:.3}}
+.drawer h2{font-size:19px}
+.formula{font-family:var(--mono);font-size:13.5px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:6px}
+.formula span{color:var(--muted)}
+.drawer dl{margin:0;display:grid;grid-template-columns:1fr auto;gap:8px 16px;font-size:14px}
+.drawer dt{color:var(--muted)} .drawer dd{margin:0;font-family:var(--mono);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.warn{background:var(--bad-soft);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:13px}
+.warn b{color:var(--bad)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span class="eyebrow">StatDoctor · Hospital view</span>
+      <h1>Northside Sample Hospital<br>Workforce Dashboard</h1>
+      <span class="sample"><span class="tag">Sample data</span> Prototype for Sprint 1. Not real hospital figures.</span>
+    </div>
+    <div class="tools">
+      <button class="btn primary" id="playBtn" type="button"><svg viewBox="0 0 24 24"><path class="solid" id="playIcon" d="M7 4.5v15l12-7.5z"/></svg><span id="playTxt">Play the quarter</span></button>
+      <button class="btn" id="howBtn" type="button">How is this calculated?</button>
+      <button class="btn icon-btn" id="themeBtn" type="button" aria-label="Switch light or dark theme" title="Switch theme"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+    </div>
+  </header>
+
+  <section class="panel scrub-panel">
+    <div class="head">
+      <h2>Choose a period</h2>
+      <span class="hint"><svg viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>Drag the dial, click a month, or use <kbd>←</kbd><kbd>→</kbd></span>
+    </div>
+    <div class="scrub" id="scrub" role="slider" tabindex="0" aria-label="Period" aria-valuemin="0" aria-valuemax="3" aria-valuenow="2" aria-valuetext="Sep 2026">
+      <div class="rail"><div class="fillbar" id="scrubFill"></div></div>
+      <button class="stop" data-i="0" style="left:0%" tabindex="-1"><i></i>Jul</button>
+      <button class="stop" data-i="1" style="left:33.333%" tabindex="-1"><i></i>Aug</button>
+      <button class="stop" data-i="2" style="left:66.667%" tabindex="-1"><i></i>Sep</button>
+      <button class="stop" data-i="3" style="left:100%" tabindex="-1"><i></i>All 3 months</button>
+      <div class="knob" id="knob"></div>
+    </div>
+    <div class="caption" aria-live="polite"><span class="mtag" id="capTag">Sep</span><p id="capTxt"></p></div>
+    <div class="progress" id="progress" hidden><b id="progressBar"></b></div>
+  </section>
+
+  <section class="hero">
+    <div class="panel spot">
+      <div class="head">
+        <h2 id="swarmTitle">Every shift posted in Sep 2026</h2>
+        <div class="legend"><span><i style="background:var(--accent)"></i>Filled through StatDoctor</span><span><i style="background:var(--bad)"></i>Unfilled (staffing gap)</span></div>
+      </div>
+      <p class="note">One dot per posted shift. Move through them to scatter the dots, click to send a ripple, hover one to see its number.</p>
+      <div class="swarm-wrap"><canvas id="swarm" aria-label="One dot per posted shift, filled shifts in blue and unfilled in red"></canvas></div>
+    </div>
+    <div class="panel spot gauge-panel">
+      <div class="head"><h2 id="frLabel">Fill rate, Sep 2026</h2><span class="story">US01</span></div>
+      <svg id="gauge" viewBox="0 0 220 220" role="img" aria-label="Fill rate gauge">
+        <circle cx="110" cy="110" r="86" fill="none" stroke="var(--empty)" stroke-width="18"/>
+        <circle id="gArc" cx="110" cy="110" r="86" fill="none" stroke="var(--accent)" stroke-width="18" stroke-linecap="round" transform="rotate(-90 110 110)"/>
+        <path id="gZone" fill="none" stroke="var(--bad)" stroke-width="4" stroke-linecap="round" opacity=".35"/>
+        <text id="gVal" x="110" y="112" text-anchor="middle" style="font-family:var(--mono);font-size:38px;font-weight:600;fill:var(--ink)">88.8%</text>
+        <text id="gSub" x="110" y="138" text-anchor="middle" style="font-size:12px;fill:var(--muted)">222 of 250 filled</text>
+        <g class="handle" id="gHandle" tabindex="0" role="slider" aria-label="Fill-rate target" aria-valuemin="70" aria-valuemax="95">
+          <circle id="gHit" r="22" fill="transparent"/>
+          <circle id="gKnob" r="12" fill="var(--surface)" stroke="var(--ink)" stroke-width="3"/>
+          <text id="gKnobTxt" text-anchor="middle" style="font-family:var(--mono);font-size:11px;font-weight:600;fill:var(--ink)">85</text>
+        </g>
+      </svg>
+      <span id="frPill" class="pill good">Above 85% target</span>
+      <span class="hint"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>Drag the round handle to move the target</span>
+    </div>
+  </section>
+
+  <section class="kpis">
+    <div class="panel spot kpi tilt">
+      <div class="label"><span id="svLabel">Savings vs agency rates, Sep 2026</span><span class="story">US03</span></div>
+      <div class="value" id="svValue">$122,100</div>
+      <div class="sub" id="svSub"></div>
+      <div class="cmp">
+        <div class="row"><span>Agency cost</span><span class="bar"><b id="cmpA" style="background:var(--amber)"></b></span><span class="num" id="cmpAv"></span></div>
+        <div class="row"><span>StatDoctor</span><span class="bar"><b id="cmpS" style="background:var(--accent)"></b></span><span class="num" id="cmpSv"></span></div>
+      </div>
+    </div>
+    <div class="panel spot kpi tilt">
+      <div class="label"><span id="gpLabel">Unfilled shifts, Sep 2026</span><span class="story">Gaps</span></div>
+      <div class="value" id="gpValue">28</div>
+      <div class="sub" id="gpSub"></div>
+      <div class="minis" id="minis"></div>
+    </div>
+    <div class="panel spot kpi tilt">
+      <div class="label"><span>Saving per shift</span><span class="tag amber">Placeholder</span></div>
+      <div class="value" id="spValue">$550</div>
+      <div class="sub" id="spSub">Agency $2,800 − StatDoctor $2,250</div>
+      <div class="sub">Drag the rate rail on the savings chart to test other benchmarks.</div>
+    </div>
+  </section>
+
+  <section class="charts">
+    <div class="panel spot">
+      <div class="head"><h2>Shift fill rate by month</h2><span class="hint"><svg viewBox="0 0 24 24"><path d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4"/></svg>Drag the target line</span></div>
+      <p class="note" id="frNote">Months below the 85% target are red. These are staffing gaps to act on.</p>
+      <svg class="chart" id="frChart" viewBox="0 0 440 250" role="img" aria-label="Fill rate by month"></svg>
+      <div class="legend"><span><i style="background:var(--accent)"></i>At or above target</span><span><i style="background:var(--bad)"></i>Below target (staffing gap)</span></div>
+    </div>
+    <div class="panel spot">
+      <div class="head"><h2>Savings against agency rates by month</h2><span class="hint"><svg viewBox="0 0 24 24"><path d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4"/></svg>Drag the two rates</span></div>
+      <p class="note">What the hospital saved by filling shifts through StatDoctor instead of an agency.</p>
+      <div class="sv-body">
+        <svg class="chart" id="svChart" viewBox="0 0 320 250" role="img" aria-label="Savings by month"></svg>
+        <div class="rail-wrap"><svg id="rail" viewBox="0 0 150 250" role="group" aria-label="Rate per shift"></svg></div>
+      </div>
+      <div class="scenario">
+        <div class="legend"><span><i style="background:var(--accent)"></i>Monthly savings</span><span><i style="background:transparent;border:1.5px dashed var(--muted)"></i>Sprint 1 values</span></div>
+        <span class="delta" id="delta"></span>
+        <button class="btn" id="resetBtn" type="button" hidden>Reset to Sprint 1 values</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>Data: StatDoctor_Sprint1_SampleData.xlsx · Agency benchmark is a documented placeholder ($2,800 per shift) until confirmed by the Product Owner.</footer>
+</div>
+
+<div id="tip" hidden></div>
+<canvas id="confetti" aria-hidden="true"></canvas>
+
+<div class="scrim" id="scrim" hidden>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="howTitle">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <h2 id="howTitle">How is this calculated?</h2>
+      <button class="btn" id="closeBtn" type="button">Close</button>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:6px">Fill rate (US01)</div>
+      <div class="formula"><div>Fill rate = Shifts filled ÷ Shifts posted</div><span id="exTarget">Below 85% is flagged as a staffing gap.</span></div>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:6px">Cost savings (US03)</div>
+      <div class="formula">
+        <div>Saving per shift = Agency rate − StatDoctor rate</div>
+        <div>Savings = Shifts filled × Saving per shift</div>
+      </div>
+    </div>
+    <dl>
+      <dt>Agency benchmark (per shift)</dt><dd id="exAgency">$2,800</dd>
+      <dt>StatDoctor rate (per shift)</dt><dd id="exSd">$2,250</dd>
+      <dt>Saving per shift</dt><dd id="exSave">$550</dd>
+      <dt id="exLabel">Sep 2026: 222 shifts × $550</dt><dd id="exValue">$122,100</dd>
+    </dl>
+    <div class="warn"><b>Placeholder benchmark.</b> The agency rate was not confirmed by Day 2, so the team used this documented placeholder (our planned risk response). It will be replaced when the Product Owner confirms the real benchmark.</div>
+  </aside>
+</div>
+
+<script>
+/* ---------- data ---------- */
+const D=[
+ {m:"Jul 2026",s:"Jul",full:"July",posted:240,filled:216},
+ {m:"Aug 2026",s:"Aug",full:"August",posted:260,filled:213},
+ {m:"Sep 2026",s:"Sep",full:"September",posted:250,filled:222}];
+const ALL={m:"Jul–Sep 2026",s:"Q3",full:"The quarter",posted:D.reduce((a,d)=>a+d.posted,0),filled:D.reduce((a,d)=>a+d.filled,0)};
+const STOPS=[...D,ALL];
+const DEF={agency:2800,sd:2250,target:.85};
+const S={pos:2,goal:2,scrubbing:false,target:DEF.target,agency:DEF.agency,sd:DEF.sd};
+const save=()=>S.agency-S.sd;
+const $=id=>document.getElementById(id);
+const fmt$=n=>(n<0?"−$":"$")+Math.abs(Math.round(n)).toLocaleString("en-AU");
+const pct=n=>(n*100).toFixed(1)+"%";
+const T=()=>Math.round(S.target*100)+"%";
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS="http://www.w3.org/2000/svg";
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e}
+function setT(e,s){if(e.textContent!==s)e.textContent=s}
+function svgPt(svg,e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
+const tip=$("tip");
+function showTip(e,txt){tip.textContent=txt;tip.hidden=false;const x=Math.min(e.clientX+14,innerWidth-tip.offsetWidth-8);tip.style.left=x+"px";tip.style.top=(e.clientY-38)+"px"}
+function hideTip(){tip.hidden=true}
+function blend(p){const i=Math.min(2,Math.floor(p)),k=p-i,a=STOPS[i],b=STOPS[Math.min(3,i+1)];
+  return{posted:a.posted+(b.posted-a.posted)*k,filled:a.filled+(b.filled-a.filled)*k,stop:STOPS[Math.round(p)]}}
+
+/* ---------- colours for canvas ---------- */
+let C={};
+function hex(s){s=s.trim().replace("#","");if(s.length===3)s=s.split("").map(c=>c+c).join("");return[0,2,4].map(i=>parseInt(s.slice(i,i+2),16))}
+function readColors(){const cs=getComputedStyle(document.documentElement);["accent","bad","good","amber","ink","empty","surface"].forEach(k=>C[k]=hex(cs.getPropertyValue("--"+k)))}
+const mix=(a,b,k)=>a.map((v,i)=>Math.round(v+(b[i]-v)*k));
+const rgb=(c,a=1)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+/* ---------- scrubber ---------- */
+const scrub=$("scrub"),knob=$("knob"),stops=[...scrub.querySelectorAll(".stop")];
+function posFromEvent(e){const r=scrub.getBoundingClientRect();return clamp((e.clientX-r.left)/r.width*3,0,3)}
+scrub.addEventListener("pointerdown",e=>{stopStory();if(e.target.closest(".stop"))return;S.scrubbing=true;scrub.setPointerCapture(e.pointerId);S.pos=posFromEvent(e)});
+scrub.addEventListener("pointermove",e=>{if(S.scrubbing)S.pos=posFromEvent(e)});
+scrub.addEventListener("pointerup",()=>{if(S.scrubbing){S.scrubbing=false;S.goal=Math.round(S.pos)}});
+stops.forEach(b=>b.addEventListener("click",()=>{stopStory();S.goal=+b.dataset.i}));
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"&&!scrim.hidden){closeDrawer();return}
+  if(!scrim.hidden||e.target.closest("#gHandle,#rail"))return;
+  if(e.key==="ArrowRight"||e.key==="ArrowLeft"){stopStory();S.goal=clamp(S.goal+(e.key==="ArrowRight"?1:-1),0,3);e.preventDefault()}
+});
+
+/* ---------- story mode ---------- */
+let story=null;
+function caption(i){
+  const s=STOPS[i],fr=s.filled/s.posted,gap=s.posted-s.filled,sv=s.filled*save(),ok=fr>=S.target;
+  const svTxt=sv>=0?`Savings against agency rates: ${fmt$(sv)}.`:`At these rates StatDoctor costs ${fmt$(-sv)} more than an agency.`;
+  if(i===3)return `Across the quarter, ${s.filled} of ${s.posted} shifts were filled (${pct(fr)}), ${ok?"above":"below"} the ${T()} target. ${gap} shifts went uncovered in total. ${svTxt}`;
+  const worst=D.reduce((a,d,j)=>(d.posted-d.filled)>(D[a].posted-D[a].filled)?j:a,0);
+  return `${s.full}: ${s.filled} of ${s.posted} shifts filled, a ${pct(fr)} fill rate. ${ok?`That clears the ${T()} target.`:`That is below the ${T()} target, leaving ${gap} shifts without a doctor${worst===i?", the biggest gap of the quarter":""}.`} ${svTxt}`;
+}
+function startStory(){
+  stopStory();let i=0;S.goal=0;$("progress").hidden=false;setPlay(true);
+  const dwell=3600;let t0=performance.now();
+  story={raf:0,tick(t){const k=(t-t0)/dwell;$("progressBar").style.width=clamp((i+Math.min(k,1))/4*100,0,100)+"%";
+    if(k>=1){i++;t0=t;if(i>3){stopStory();return}S.goal=i}story.raf=requestAnimationFrame(story.tick)}};
+  story.raf=requestAnimationFrame(story.tick);
+}
+function stopStory(){if(!story)return;cancelAnimationFrame(story.raf);story=null;$("progress").hidden=true;setPlay(false)}
+function setPlay(on){$("playTxt").textContent=on?"Stop":"Play the quarter";$("playIcon").setAttribute("d",on?"M6 5h4v14H6zM14 5h4v14h-4z":"M7 4.5v15l12-7.5z")}
+$("playBtn").addEventListener("click",()=>story?stopStory():startStory());
+
+/* ---------- shift swarm ---------- */
+const swarm=(()=>{
+  const cv=$("swarm"),ctx=cv.getContext("2d");let W=0,H=0,dpr=1,P=[],n=0,f=0,cell=10,cols=1;
+  const mouse={x:-1e4,y:-1e4,in:false},ripples=[];let hover=-1;
+  function resize(){const r=cv.getBoundingClientRect();dpr=Math.min(2,devicePixelRatio||1);W=r.width;H=r.height;cv.width=W*dpr;cv.height=H*dpr;layout()}
+  function layout(){if(!n||!W)return;cols=Math.ceil(Math.sqrt(n*W/H));let rows=Math.ceil(n/cols);cell=Math.min(W/cols,H/rows);
+    const ox=(W-cols*cell)/2,oy=(H-rows*cell)/2;
+    P.forEach((p,i)=>{if(i<n){p.tx=ox+(i%cols+.5)*cell;p.ty=oy+(Math.floor(i/cols)+.5)*cell;p.live=1}else{p.tx=p.x;p.ty=H+40;p.live=0}})}
+  function set(N,F){if(N===n&&F===f)return;
+    while(P.length<N)P.push({x:Math.random()*W,y:-10-Math.random()*60,vx:0,vy:0,c:1,a:0,tx:0,ty:0,live:1});
+    n=N;f=F;layout()}
+  cv.addEventListener("pointermove",e=>{const r=cv.getBoundingClientRect();mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top;mouse.in=true;
+    let best=-1,bd=(cell*.7)**2;for(let i=0;i<n;i++){const p=P[i],d=(p.x-mouse.x)**2+(p.y-mouse.y)**2;if(d<bd){bd=d;best=i}}
+    hover=best;if(best>=0)showTip(e,`Shift ${best+1} of ${n} · ${best<f?"filled":"unfilled"}`);else hideTip()});
+  cv.addEventListener("pointerleave",()=>{mouse.in=false;mouse.x=mouse.y=-1e4;hover=-1;hideTip()});
+  cv.addEventListener("pointerdown",e=>{const r=cv.getBoundingClientRect();ripples.push({x:e.clientX-r.left,y:e.clientY-r.top,r:0})});
+  function step(){
+    if(!W)return;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+    const rad=Math.max(1.4,cell*.36),R=Math.max(46,cell*4);
+    for(const rp of ripples)rp.r+=reduce?999:7;
+    for(let i=ripples.length-1;i>=0;i--)if(ripples[i].r>Math.hypot(W,H))ripples.splice(i,1);
+    for(let i=0;i<P.length;i++){const p=P[i];
+      if(reduce){p.x=p.tx;p.y=p.ty}else{
+        let ax=(p.tx-p.x)*.07,ay=(p.ty-p.y)*.07;
+        if(mouse.in){const dx=p.x-mouse.x,dy=p.y-mouse.y,d=Math.hypot(dx,dy);if(d<R&&d>.01){const k=(1-d/R)*3.2;ax+=dx/d*k;ay+=dy/d*k}}
+        for(const rp of ripples){const dx=p.x-rp.x,dy=p.y-rp.y,d=Math.hypot(dx,dy),w=Math.abs(d-rp.r);if(w<26&&d>.01){const k=(1-w/26)*4;ax+=dx/d*k;ay+=dy/d*k}}
+        p.vx=(p.vx+ax)*.8;p.vy=(p.vy+ay)*.8;p.x+=p.vx;p.y+=p.vy}
+      const want=i<f?1:0;p.c+=(want-p.c)*(reduce?1:.08);p.a+=((p.live?1:0)-p.a)*(reduce?1:.1);
+      if(p.a<.02)continue;
+      const col=mix(C.bad,C.accent,p.c);const big=i===hover?1.9:1;
+      ctx.fillStyle=rgb(col,p.a);ctx.beginPath();ctx.arc(p.x,p.y,rad*big,0,Math.PI*2);ctx.fill();
+      if(i===hover){ctx.strokeStyle=rgb(C.ink,.9);ctx.lineWidth=1.5;ctx.stroke()}
+    }
+    for(const rp of ripples){ctx.strokeStyle=rgb(C.accent,Math.max(0,.35-rp.r/900));ctx.lineWidth=2;ctx.beginPath();ctx.arc(rp.x,rp.y,rp.r,0,Math.PI*2);ctx.stroke()}
+  }
+  new ResizeObserver(resize).observe(cv);
+  return{set,step};
+})();
+
+/* ---------- gauge ---------- */
+const gauge=$("gauge"),CIRC=2*Math.PI*86;
+$("gArc").setAttribute("stroke-dasharray",CIRC);
+function ang(frac){return frac*2*Math.PI-Math.PI/2}
+function arcPath(a0,a1,r){const p=a=>[110+r*Math.cos(a),110+r*Math.sin(a)];const[x0,y0]=p(a0),[x1,y1]=p(a1);return`M${x0} ${y0}A${r} ${r} 0 ${a1-a0>Math.PI?1:0} 1 ${x1} ${y1}`}
+let gDrag=false;
+function setTarget(v){S.target=clamp(Math.round(v*100)/100,.70,.95)}
+$("gHandle").addEventListener("pointerdown",e=>{gDrag=true;gauge.setPointerCapture(e.pointerId);e.preventDefault()});
+gauge.addEventListener("pointermove",e=>{if(!gDrag)return;const p=svgPt(gauge,e);let fr=(Math.atan2(p.y-110,p.x-110)+Math.PI/2)/(2*Math.PI);if(fr<0)fr+=1;if(fr<.3)fr=.95;setTarget(fr)});
+gauge.addEventListener("pointerup",()=>gDrag=false);
+$("gHandle").addEventListener("keydown",e=>{if(["ArrowUp","ArrowRight"].includes(e.key)){setTarget(S.target+.01);e.preventDefault()}if(["ArrowDown","ArrowLeft"].includes(e.key)){setTarget(S.target-.01);e.preventDefault()}});
+
+/* ---------- fill-rate chart ---------- */
+const fr=(()=>{
+  const svg=$("frChart"),W=440,H=250,L=46,R=74,Tp=16,B=32,iw=W-L-R,ih=H-Tp-B,min=.7,max=1;
+  const y=v=>Tp+ih-(clamp(v,min,max)-min)/(max-min)*ih,inv=py=>min+(Tp+ih-py)/ih*(max-min);
+  [.7,.8,.9,1].forEach(t=>{el("line",{x1:L,x2:W-R,y1:y(t),y2:y(t),stroke:"var(--grid)"},svg);el("text",{x:L-8,y:y(t)+4,"text-anchor":"end"},svg).textContent=Math.round(t*100)+"%"});
+  const bw=iw/3*.52;
+  const bars=D.map((d,i)=>{const cx=L+iw/3*(i+.5),v=d.filled/d.posted;
+    const r=el("rect",{x:cx-bw/2,width:bw,rx:5,class:"bar",y:y(min),height:0},svg);
+    const t=el("text",{x:cx,"text-anchor":"middle",class:"val"},svg);t.textContent=pct(v);
+    const m=el("text",{x:cx,y:H-10,"text-anchor":"middle"},svg);m.textContent=d.s;
+    r.addEventListener("pointermove",e=>showTip(e,`${d.m}: ${d.filled}/${d.posted} = ${pct(v)}`));r.addEventListener("pointerleave",hideTip);
+    r.addEventListener("click",()=>{stopStory();S.goal=S.goal===i?3:i});
+    return{r,t,m,v,cur:min}});
+  const g=el("g",{class:"drag"},svg);
+  const line=el("line",{x1:L,x2:W-R,stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"6 4"},g);
+  const hit=el("line",{x1:L,x2:W-R+66,stroke:"transparent","stroke-width":22},g);
+  const pill=el("rect",{x:W-R+6,width:62,height:22,rx:11,fill:"var(--ink)"},g);
+  const pt=el("text",{x:W-R+37,"text-anchor":"middle",style:"font-family:var(--mono);font-size:11.5px;font-weight:600;fill:var(--surface)"},g);
+  g.setAttribute("tabindex","0");g.setAttribute("role","slider");g.setAttribute("aria-label","Fill-rate target");
+  let drag=false;
+  g.addEventListener("pointerdown",e=>{drag=true;svg.setPointerCapture(e.pointerId);e.preventDefault()});
+  svg.addEventListener("pointermove",e=>{if(drag)setTarget(inv(svgPt(svg,e).y))});
+  svg.addEventListener("pointerup",()=>drag=false);
+  g.addEventListener("keydown",e=>{if(e.key==="ArrowUp"){setTarget(S.target+.01);e.preventDefault()}if(e.key==="ArrowDown"){setTarget(S.target-.01);e.preventDefault()}});
+  return function(pos){
+    const allK=clamp(pos-2,0,1);
+    bars.forEach((b,i)=>{b.cur+=(b.v-b.cur)*(reduce?1:.09);const yy=y(b.cur);
+      b.r.setAttribute("y",yy);b.r.setAttribute("height",y(min)-yy);
+      b.r.setAttribute("fill",b.v<S.target?"var(--bad)":"var(--accent)");
+      const w=Math.max(clamp(1-Math.abs(pos-i),0,1),allK);b.r.setAttribute("opacity",.28+.72*w);
+      b.m.style.fill=w>.5?"var(--ink)":"";b.m.style.fontWeight=w>.5?"700":"";
+      const near=Math.abs(y(b.v)-y(S.target))<15&&b.v<S.target;
+      b.t.setAttribute("y",near?yy+17:yy-7);b.t.style.fill=near?"var(--surface)":"";});
+    const ty=y(S.target);[line,hit].forEach(l=>{l.setAttribute("y1",ty);l.setAttribute("y2",ty)});
+    pill.setAttribute("y",ty-11);pt.setAttribute("y",ty+4);setT(pt,T()+" ↕");g.setAttribute("aria-valuenow",Math.round(S.target*100));
+  };
+})();
+
+/* ---------- savings chart + rate rail ---------- */
+function niceAxis(lo,hi){const span=hi-lo||1,raw=span/3,p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;
+  const st=(m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*p,mn=Math.floor(lo/st)*st,mx=Math.ceil(hi/st)*st,t=[];
+  for(let v=mn;v<=mx+1e-9;v+=st)t.push(+v.toFixed(4));return{min:mn,max:mx,ticks:t}}
+const sv=(()=>{
+  const svg=$("svChart"),W=320,H=250,L=52,R=8,Tp=18,B=32,iw=W-L-R,ih=H-Tp-B;
+  const grid=el("g",{},svg),body=el("g",{},svg);let key="",ax={min:0,max:150000};
+  const y=v=>Tp+ih-(v-ax.min)/(ax.max-ax.min)*ih;const bw=iw/3*.5;
+  const bars=D.map((d,i)=>{const cx=L+iw/3*(i+.5);
+    const ghost=el("rect",{x:cx-bw/2-3,width:bw+6,rx:5,fill:"none",stroke:"var(--muted)","stroke-width":1.3,"stroke-dasharray":"4 3",opacity:0},body);
+    const r=el("rect",{x:cx-bw/2,width:bw,rx:5,class:"bar"},body);
+    const t=el("text",{x:cx,"text-anchor":"middle",class:"val"},body);
+    const m=el("text",{x:cx,y:H-10,"text-anchor":"middle"},body);m.textContent=d.s;
+    r.addEventListener("pointermove",e=>showTip(e,`${d.m}: ${d.filled} × ${fmt$(save())} = ${fmt$(d.filled*save())}`));r.addEventListener("pointerleave",hideTip);
+    r.addEventListener("click",()=>{stopStory();S.goal=S.goal===i?3:i});
+    return{r,t,m,ghost,cur:0,d}});
+  return function(pos){
+    const vals=D.map(d=>d.filled*save()),base=D.map(d=>d.filled*(DEF.agency-DEF.sd));
+    const a=niceAxis(Math.min(0,...vals),Math.max(1,...vals,...base)*1.12);const k=a.ticks.join();
+    if(k!==key){key=k;ax=a;grid.innerHTML="";a.ticks.forEach(t=>{el("line",{x1:L,x2:W-R,y1:y(t),y2:y(t),stroke:t===0?"var(--muted)":"var(--grid)"},grid);
+      el("text",{x:L-8,y:y(t)+4,"text-anchor":"end"},grid).textContent=t===0?"$0":(t<0?"−$":"$")+Math.abs(t/1000)+"k"})}
+    const changed=save()!==DEF.agency-DEF.sd,allK=clamp(pos-2,0,1);
+    bars.forEach((b,i)=>{const v=vals[i];b.cur+=(v-b.cur)*(reduce?1:.15);const y0=y(0),yv=y(b.cur);
+      b.r.setAttribute("y",Math.min(y0,yv));b.r.setAttribute("height",Math.abs(y0-yv));b.r.setAttribute("fill",v<0?"var(--bad)":"var(--accent)");
+      const w=Math.max(clamp(1-Math.abs(pos-i),0,1),allK);b.r.setAttribute("opacity",.28+.72*w);
+      b.m.style.fill=w>.5?"var(--ink)":"";b.m.style.fontWeight=w>.5?"700":"";
+      b.t.setAttribute("y",b.cur>=0?yv-7:yv+15);setT(b.t,(b.cur<0?"−$":"$")+Math.abs(b.cur/1000).toFixed(1)+"k");
+      const gy=y(base[i]);b.ghost.setAttribute("y",gy-3);b.ghost.setAttribute("height",Math.max(0,y(0)-gy+3));b.ghost.setAttribute("opacity",changed?1:0)});
+  };
+})();
+const rail=(()=>{
+  let active=null;const svg=$("rail"),lo=1500,hi=4000,Y0=232,Y1=18,X=34;const y=v=>Y0-(v-lo)/(hi-lo)*(Y0-Y1),inv=py=>lo+(Y0-py)/(Y0-Y1)*(hi-lo);
+  el("line",{x1:X,x2:X,y1:Y1,y2:Y0,stroke:"var(--empty)","stroke-width":8,"stroke-linecap":"round"},svg);
+  [1500,2000,2500,3000,3500,4000].forEach(v=>{el("line",{x1:X-9,x2:X-5,y1:y(v),y2:y(v),stroke:"var(--muted)"},svg)});
+  const band=el("rect",{x:X-4,width:8,rx:4},svg);
+  const mk=(key,color,name)=>{const g=el("g",{class:"knob",tabindex:0,role:"slider","aria-label":name+" per shift","aria-valuemin":lo,"aria-valuemax":hi},svg);
+    el("circle",{r:20,fill:"transparent"},g);el("circle",{r:11,fill:"var(--surface)",stroke:color,"stroke-width":4},g);
+    const lab=el("text",{x:22,style:"font-size:11px;fill:var(--muted);font-weight:600"},g);lab.textContent=name;
+    const val=el("text",{x:22,style:"font-family:var(--mono);font-size:13px;font-weight:600;fill:var(--ink)"},g);
+    g.addEventListener("pointerdown",e=>{active=key;svg.setPointerCapture(e.pointerId);e.preventDefault();e.stopPropagation()});
+    g.addEventListener("keydown",e=>{if(e.key==="ArrowUp"||e.key==="ArrowRight"){S[key]=clamp(S[key]+50,lo,hi);e.preventDefault()}if(e.key==="ArrowDown"||e.key==="ArrowLeft"){S[key]=clamp(S[key]-50,lo,hi);e.preventDefault()}});
+    return{g,lab,val}};
+  svg.addEventListener("pointermove",e=>{if(active)S[active]=clamp(Math.round(inv(svgPt(svg,e).y)/50)*50,lo,hi)});
+  svg.addEventListener("pointerup",()=>active=null);svg.addEventListener("pointercancel",()=>active=null);
+  const A=mk("agency","var(--amber)","Agency"),Sd=mk("sd","var(--accent)","StatDoctor");
+  return function(){const ya=y(S.agency),ys=y(S.sd);
+    band.setAttribute("y",Math.min(ya,ys));band.setAttribute("height",Math.abs(ya-ys));band.setAttribute("fill",S.agency>=S.sd?"var(--accent)":"var(--bad)");band.setAttribute("opacity",.45);
+    let la=ya,ls=ys;if(Math.abs(la-ls)<34){const mid=(la+ls)/2,up=ya<=ys;la=mid+(up?-17:17);ls=mid+(up?17:-17)}
+    A.g.setAttribute("transform",`translate(${X} ${ya})`);Sd.g.setAttribute("transform",`translate(${X} ${ys})`);
+    A.lab.setAttribute("y",la-ya-3);A.val.setAttribute("y",la-ya+12);Sd.lab.setAttribute("y",ls-ys-3);Sd.val.setAttribute("y",ls-ys+12);
+    setT(A.val,fmt$(S.agency));setT(Sd.val,fmt$(S.sd));A.g.setAttribute("aria-valuenow",S.agency);Sd.g.setAttribute("aria-valuenow",S.sd)};
+})();
+$("resetBtn").addEventListener("click",()=>{S.agency=DEF.agency;S.sd=DEF.sd;S.target=DEF.target});
+
+/* ---------- confetti ---------- */
+const conf=(()=>{const cv=$("confetti"),ctx=cv.getContext("2d");let P=[];
+  function burst(x,y){if(reduce)return;cv.width=innerWidth*devicePixelRatio;cv.height=innerHeight*devicePixelRatio;const cols=[C.accent,C.good,C.amber];
+    for(let i=0;i<90;i++){const a=Math.random()*Math.PI*2,s=3+Math.random()*7;P.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-4,r:Math.random()*6,w:4+Math.random()*5,h:6+Math.random()*8,c:cols[i%3],life:1,spin:(Math.random()-.5)*.3})}}
+  function step(){if(!P.length)return;const d=devicePixelRatio;ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,innerWidth,innerHeight);
+    P.forEach(p=>{p.vy+=.25;p.vx*=.985;p.x+=p.vx;p.y+=p.vy;p.r+=p.spin;p.life-=.011;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.r);ctx.fillStyle=rgb(p.c,Math.max(0,p.life));ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore()});
+    P=P.filter(p=>p.life>0&&p.y<innerHeight+40);if(!P.length)ctx.clearRect(0,0,innerWidth,innerHeight)}
+  return{burst,step}})();
+
+/* ---------- tilt + spotlight ---------- */
+const fine=matchMedia("(pointer:fine)").matches;
+document.querySelectorAll(".spot").forEach(p=>{
+  p.addEventListener("pointermove",e=>{const r=p.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;p.style.setProperty("--mx",x+"px");p.style.setProperty("--my",y+"px");
+    if(fine&&!reduce&&p.classList.contains("tilt"))p.style.transform=`perspective(700px) rotateX(${(.5-y/r.height)*7}deg) rotateY(${(x/r.width-.5)*9}deg) translateY(-3px)`});
+  p.addEventListener("pointerleave",()=>{p.style.setProperty("--mx","-999px");p.style.transform=""});
+});
+
+/* ---------- KPIs per frame ---------- */
+const minis=$("minis");
+D.forEach(d=>{const w=document.createElement("div");w.innerHTML=`<span></span>${d.s}`;minis.appendChild(w)});
+const maxGap=Math.max(...D.map(d=>d.posted-d.filled));
+let lastStop=-1,lastOk=null,capKey="";
+function updateText(b,pos){
+  const posted=b.posted,filled=b.filled,label=b.stop.m,r=filled/posted,SV=save(),below=r<S.target;
+  const P=Math.round(posted),F=Math.round(filled);
+  setT($("frLabel"),"Fill rate, "+label);setT($("gVal"),pct(r));setT($("gSub"),`${F} of ${P} filled`);
+  $("gVal").style.fill=below?"var(--bad)":"var(--ink)";
+  $("gArc").setAttribute("stroke-dashoffset",CIRC*(1-r));$("gArc").setAttribute("stroke",below?"var(--bad)":"var(--accent)");
+  $("gZone").setAttribute("d",arcPath(ang(0)+.001,ang(S.target),104));
+  const ta=ang(S.target),hx=110+86*Math.cos(ta),hy=110+86*Math.sin(ta);
+  $("gHit").setAttribute("cx",hx);$("gHit").setAttribute("cy",hy);$("gKnob").setAttribute("cx",hx);$("gKnob").setAttribute("cy",hy);
+  $("gKnobTxt").setAttribute("x",hx);$("gKnobTxt").setAttribute("y",hy+4);setT($("gKnobTxt"),String(Math.round(S.target*100)));
+  $("gHandle").setAttribute("aria-valuenow",Math.round(S.target*100));
+  const p=$("frPill");const pc="pill "+(below?"bad":"good");if(p.className!==pc)p.className=pc;setT(p,below?`Below ${T()} target – staffing gap`:`Above ${T()} target`);
+  const s=F*SV;
+  setT($("svLabel"),"Savings vs agency rates, "+label);setT($("svValue"),fmt$(s));$("svValue").style.color=s<0?"var(--bad)":"";
+  setT($("svSub"),SV>=0?`${F} shifts × ${fmt$(SV)} saved per shift`:`${F} shifts × ${fmt$(-SV)} more than agency`);
+  const ca=F*S.agency,cs=F*S.sd,cm=Math.max(ca,cs,1);
+  $("cmpA").style.width=ca/cm*100+"%";$("cmpS").style.width=cs/cm*100+"%";setT($("cmpAv"),fmt$(ca));setT($("cmpSv"),fmt$(cs));
+  const gap=P-F;setT($("gpLabel"),"Unfilled shifts, "+label);setT($("gpValue"),String(gap));setT($("gpSub"),(gap/P*100).toFixed(1)+"% of posted shifts had no doctor");
+  const allK=clamp(pos-2,0,1);[...minis.children].forEach((c,i)=>{const sp=c.firstChild,g=D[i].posted-D[i].filled;sp.style.height=(g/maxGap*30)+"px";sp.style.opacity=.3+.7*Math.max(clamp(1-Math.abs(pos-i),0,1),allK)});
+  setT($("spValue"),fmt$(SV));$("spValue").style.color=SV<0?"var(--bad)":"";setT($("spSub"),`Agency ${fmt$(S.agency)} − StatDoctor ${fmt$(S.sd)}`);
+  setT($("swarmTitle"),`Every shift posted in ${label} (${P})`);
+  setT($("frNote"),`Months below the ${T()} target are red. These are staffing gaps to act on. Click a bar to focus that month.`);
+  // drawer
+  setT($("exTarget"),`Below ${T()} is flagged as a staffing gap.`);setT($("exAgency"),fmt$(S.agency));setT($("exSd"),fmt$(S.sd));setT($("exSave"),fmt$(SV));
+  setT($("exLabel"),`${label}: ${F} shifts × ${fmt$(SV)}`);setT($("exValue"),fmt$(s));
+  const changed=S.agency!==DEF.agency||S.sd!==DEF.sd||Math.abs(S.target-DEF.target)>.001;$("resetBtn").hidden=!changed;
+  const diff=s-F*(DEF.agency-DEF.sd);setT($("delta"),diff?`${diff>0?"+":""}${fmt$(diff)} vs Sprint 1 for ${label}`:"");$("delta").style.color=diff>0?"var(--good)":diff<0?"var(--bad)":"";
+}
+
+/* ---------- main loop ---------- */
+function frame(){
+  if(!S.scrubbing){S.pos+=(S.goal-S.pos)*(reduce?1:.1);if(Math.abs(S.goal-S.pos)<.002)S.pos=S.goal}
+  const pos=S.pos,b=blend(pos);
+  const pc=pos/3*100;knob.style.left=pc+"%";$("scrubFill").style.width=pc+"%";
+  const ni=Math.round(pos);stops.forEach((s,i)=>s.classList.toggle("on",i<=ni));
+  scrub.setAttribute("aria-valuenow",ni);scrub.setAttribute("aria-valuetext",STOPS[ni].m);
+  updateText(b,pos);
+  swarm.set(Math.round(b.posted),Math.round(b.filled));swarm.step();
+  fr(pos);sv(pos);rail();conf.step();
+  const ck=ni+"|"+S.target+"|"+save();
+  if(ck!==capKey&&!S.scrubbing){capKey=ck;setT($("capTag"),STOPS[ni].s);const p=$("capTxt");const txt=caption(ni);if(p.textContent!==txt){p.textContent=txt;p.style.animation="none";p.offsetWidth;p.style.animation=""}}
+  if(pos===S.goal&&!S.scrubbing){const st=STOPS[ni],ok=st.filled/st.posted>=S.target;
+    if(lastOk===false&&ok&&lastStop===ni){const r=gauge.getBoundingClientRect();conf.burst(r.left+r.width/2,r.top+r.height/2)}
+    else if(lastStop!==ni&&ok&&lastOk===false){const r=gauge.getBoundingClientRect();conf.burst(r.left+r.width/2,r.top+r.height/2)}
+    lastOk=ok;lastStop=ni}
+  requestAnimationFrame(frame);
+}
+
+/* ---------- drawer + theme ---------- */
+const scrim=$("scrim");
+function closeDrawer(){scrim.hidden=true;$("howBtn").focus()}
+$("howBtn").addEventListener("click",()=>{scrim.hidden=false;$("closeBtn").focus()});
+$("closeBtn").addEventListener("click",closeDrawer);
+scrim.addEventListener("click",e=>{if(e.target===scrim)closeDrawer()});
+$("themeBtn").addEventListener("click",()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==="dark":matchMedia("(prefers-color-scheme: dark)").matches;r.dataset.theme=dark?"light":"dark";try{localStorage.setItem("sd-theme",r.dataset.theme)}catch(e){}readColors()});
+try{const t=localStorage.getItem("sd-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",readColors);
+new MutationObserver(readColors).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+readColors();
+requestAnimationFrame(frame);
+</script>
